@@ -2,7 +2,7 @@
   "paths": {
     "data_file": "data/keywords_dienmaytamduc.xlsx",
     "output_dir": "output",
-    "logo_path": "assets/logo.png",
+    "logo_path": "assets/logos/dienmaytamduc.png",
     "font_path": "assets/fonts/font.ttf"
   },
   "sheets": {
