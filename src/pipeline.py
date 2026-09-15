@@ -15,9 +15,9 @@ from .image_pipeline import ImagePipeline, cleanup_images, rate_limit_sleep
 logger = logging.getLogger(__name__)
 
 
-def run_once(keep_images: bool = False) -> bool:
+def run_once(keep_images: bool = False, settings_path: str = "settings.json") -> bool:
     """Process the next Pending row. Returns True if a row was processed, False if none."""
-    cm = ConfigManager()
+    cm = ConfigManager(settings_path=settings_path)
     config = cm.load_configurations()
 
     row = cm.fetch_next_pending_row()

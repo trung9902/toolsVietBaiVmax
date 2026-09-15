@@ -26,6 +26,14 @@ def fetch_internal_link_candidates(
     return _client().fetch_internal_link_candidates(keyword, category_id=category_id, config=config)
 
 
+def fetch_product_reference(keyword: str) -> dict | None:
+    """Best-match real product photo for `keyword`, or None (see corevmax_client for the
+    only backend that implements this — WordPress has no product-photo lookup here)."""
+    client = _client()
+    fetch = getattr(client, "fetch_product_reference", None)
+    return fetch(keyword) if fetch else None
+
+
 def upload_featured_media(local_image_path: str) -> dict:
     """Returns {'attachment_id', 'source_url'}."""
     media = _client().upload_media(local_image_path)

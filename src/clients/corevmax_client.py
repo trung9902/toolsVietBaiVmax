@@ -138,6 +138,23 @@ def fetch_internal_link_candidates(
         return []
 
 
+def fetch_product_reference(keyword: str) -> dict | None:
+    """Best-match real product photo for `keyword` — used as AI-image reference material
+    (see openai_image_client.generate_image) so generated images stay accurate to what's
+    actually sold. Returns {'name','image_url','url'} or None (dry-run, no match, or error).
+    """
+    if is_dry_run() or not keyword:
+        return None
+    try:
+        resp = _request("GET", f"{_base_url()}/api/publish/products", params={"search": keyword, "limit": 3})
+        resp.raise_for_status()
+        items = resp.json()
+        return items[0] if items else None
+    except Exception as exc:  # noqa: BLE001 - reference photo is optional
+        logger.warning("Could not fetch CoreVMax product reference for %r: %s", keyword, exc)
+        return None
+
+
 def create_post(
     title: str,
     content: str,

@@ -11,6 +11,9 @@ as often as you want; each invocation handles exactly one Pending row.
 Global flags:
   --dry-run          Mock all external APIs (no keys, no credits, nothing published).
   --keep-images      Keep generated WebP files in output/ instead of cleaning them up.
+  --settings PATH    Settings file to use (default settings.json) — pass a per-site file
+                      (e.g. settings.laikamax.json) to run against that site's own keywords,
+                      prompts and publish config.
 """
 from __future__ import annotations
 
@@ -42,7 +45,7 @@ def _apply_dry_run_flag(args) -> None:
 def cmd_init_data(args) -> int:
     from src.config_manager import ConfigManager
 
-    path = ConfigManager().create_sample_workbook()
+    path = ConfigManager(settings_path=args.settings).create_sample_workbook()
     print(f"Created sample workbook: {path}")
     return 0
 
@@ -51,7 +54,7 @@ def cmd_run_once(args) -> int:
     _apply_dry_run_flag(args)
     from src import pipeline
 
-    processed = pipeline.run_once(keep_images=args.keep_images)
+    processed = pipeline.run_once(keep_images=args.keep_images, settings_path=args.settings)
     if not processed:
         print("No Pending keyword to process.")
     return 0
@@ -65,7 +68,7 @@ def cmd_run_batch(args) -> int:
     done = 0
     for i in range(1, args.count + 1):
         log.info("Batch %d/%d — processing next Pending keyword.", i, args.count)
-        processed = pipeline.run_once(keep_images=args.keep_images)
+        processed = pipeline.run_once(keep_images=args.keep_images, settings_path=args.settings)
         if not processed:
             log.info("No more Pending keywords. Stopping after %d post(s).", done)
             break
@@ -81,8 +84,13 @@ def build_parser() -> argparse.ArgumentParser:
     def add_common(p):
         p.add_argument("--dry-run", action="store_true", help="Mock all external APIs.")
         p.add_argument("--keep-images", action="store_true", help="Keep temp images in output/.")
+        p.add_argument(
+            "--settings", default="settings.json",
+            help="Settings file to use (per-site config, e.g. settings.laikamax.json).",
+        )
 
     p_init = sub.add_parser("init-data", help="Generate sample keywords.xlsx")
+    add_common(p_init)
     p_init.set_defaults(func=cmd_init_data)
 
     p_run = sub.add_parser("run-once", help="Process the next Pending keyword once (one row)")

@@ -3,4 +3,4 @@ __pycache__/
 *.pyc
 output/*
 !output/.gitkeep
-data/keywords.xlsx
+data/keywords*.xlsx

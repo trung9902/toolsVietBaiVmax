@@ -13,7 +13,8 @@ import uuid
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .clients import openai_client, replicate_client
+from . import publisher
+from .clients import openai_client, openai_image_client, replicate_client
 
 logger = logging.getLogger(__name__)
 
@@ -34,16 +35,51 @@ class ImagePipeline:
         self.model = config["replicate"]["model"]
         self.version = config["replicate"].get("version")
         self.openai_model = config["openai"]["model"]
+        self.image_provider = config["image"].get("provider", "replicate")
         os.makedirs(self.output_dir, exist_ok=True)
 
     # ------------------------------------------------------ generate + clean
     def generate_ai_background(self, h2_text: str) -> Image.Image:
-        """Translate the H2 into an English art prompt, then render 1:1 via SDXL."""
+        """Render a 1:1 background image for this heading/title.
+
+        `image.provider` in settings.json picks the backend:
+          - "replicate" (default): translate to an English art prompt, render via SDXL/Flux.
+          - "openai": look up a real product photo matching `h2_text` (CoreVMax only — see
+            publisher.fetch_product_reference) and use it as a gpt-image-1 edit reference so
+            the result stays accurate to the actual product, instead of a generic illustration.
+        """
+        if self.image_provider == "openai":
+            return self._generate_openai_background(h2_text)
+
         art_prompt = self._translate_to_art_prompt(h2_text)
         full_prompt = f"{art_prompt}, {self.style_prompt}, square 1:1 composition"
         return replicate_client.generate_image(
             full_prompt, self.model, self.version, size=self.raw_size
         )
+
+    def _generate_openai_background(self, h2_text: str) -> Image.Image:
+        reference = publisher.fetch_product_reference(h2_text)
+        reference_bytes = None
+        if reference:
+            reference_bytes = openai_image_client.download_reference(reference["image_url"])
+            if reference_bytes:
+                logger.info("Using real product photo as reference: %s", reference["name"])
+
+        if reference_bytes:
+            prompt = (
+                f"Professional e-commerce product photography of this exact product "
+                f"({h2_text}), studio lighting, clean neutral background, sharp focus, "
+                f"realistic, no added text, no watermark, square 1:1 composition. "
+                f"Keep the product's shape, color and details identical to the reference image."
+            )
+        else:
+            art_prompt = self._translate_to_art_prompt(h2_text)
+            prompt = (
+                f"{art_prompt}, professional realistic product/industrial photography, "
+                f"studio lighting, sharp focus, no text, no watermark, square 1:1 composition"
+            )
+
+        return openai_image_client.generate_image(prompt, size=self.raw_size, reference_bytes=reference_bytes)
 
     def _translate_to_art_prompt(self, h2_text: str) -> str:
         system = "You translate Vietnamese headings into concise English image-generation prompts."
