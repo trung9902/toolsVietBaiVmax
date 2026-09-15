@@ -1,20 +1,32 @@
 python main.py run-once
-python main.py retry-facebook // đăng bù nếu đăng fb book lỗi
-Cách hoạt động (an toàn với WordPress):
-1. Quét các dòng trạng thái Success nhưng Link Fanpage trống và có sẵn URL ảnh.
-  - Mặc định: chỉ lấy dòng có lỗi Facebook trong nhật ký (đúng ca "web đã đăng, FB lỗi").
-  - --include-skipped: lấy thêm dòng từng đăng khi FB bị tắt.
-2. Dùng lại caption + URL ảnh đã lưu trong Excel để đăng lại chỉ phần Facebook. Không đụng tới WordPress → không lo trùng bài.
-3. Thành công → ghi Link Fanpage, xóa lỗi cũ. Thất bại → ghi lỗi chi tiết mới, dòng khác vẫn chạy tiếp.
 
-Đã kiểm tra
+Cách hoạt động:
+1. Lấy dòng đầu tiên có trạng thái Pending trong Excel.
+2. Sinh nội dung SEO + ảnh, đăng bài lên WordPress.
+3. Thành công → ghi trạng thái Success, Link Website, thời gian đăng. Thất bại → ghi trạng thái Failed + nhật ký lỗi.
 
-- Biên dịch OK cả 4 file.
-- Dò dòng đúng: mặc định rỗng, --include-skipped bắt được Row 2 & 3.
-- CLI parse OK.
+Mỗi lần chạy chỉ xử lý đúng 1 dòng Pending.
 
-Lưu ý về Row 4
+---
 
-Bạn đã đổi thủ công Row 4 về Pending (nhật ký lỗi + link web đã bị xóa). Nên giờ không cần retry-facebook cho nó — lần chạy run-once tới sẽ tự làm lại toàn bộ WP + Facebook cho Row 4.
+python main.py run-batch 5
 
-Nếu muốn đăng luôn Facebook cho 2 bài cũ (Row 2, 3) đã có trên web, chạy: python main.py retry-facebook --include-skipped.
+Đăng nhiều bài trong 1 lệnh (ví dụ 5, hoặc 2):
+1. Xử lý tuần tự tối đa N dòng Pending, xong bài này mới sang bài kế tiếp.
+2. Hết dòng Pending giữa chừng thì dừng luôn, in ra đã đăng được bao nhiêu bài.
+3. Một bài lỗi (Failed) không làm dừng cả loạt — các bài sau vẫn chạy tiếp.
+4. Nhập số ≤ 0 hoặc không phải số → báo lỗi, không chạy.
+
+Flag kèm theo (dùng chung với run-once):
+  --dry-run       Chạy thử, mock toàn bộ API, không đăng thật.
+  --keep-images   Giữ lại ảnh tạm trong output/.
+
+Ví dụ:
+  python main.py run-batch 2
+  python main.py run-batch 5 --dry-run
+
+---
+
+Đăng lên CoreVMax thay vì WordPress: đặt PUBLISH_TARGET=corevmax trong .env
+(kèm CVX_BASE_URL, CVX_API_TOKEN) rồi chạy các lệnh trên như bình thường.
+Xem mục 6 trong README.md.

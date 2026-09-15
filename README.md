@@ -1,8 +1,8 @@
 # AutoContentPipeline
 
-Tự động hóa quy trình: chọn từ khóa `Pending` từ file Excel → sinh nội dung SEO + caption
-Fanpage (OpenAI GPT-4o) → tạo ảnh vuông 1:1 ẩn danh có gắn thương hiệu (Replicate Flux 1.1 Pro + Pillow)
-→ chèn ảnh dưới các thẻ H2 (BeautifulSoup) → đăng **bản nháp** WordPress → đăng Album Facebook
+Tự động hóa quy trình: chọn từ khóa `Pending` từ file Excel → sinh nội dung SEO
+(OpenAI GPT-4o) → tạo ảnh vuông 1:1 ẩn danh có gắn thương hiệu (Replicate Flux 1.1 Pro + Pillow)
+→ chèn ảnh dưới các thẻ H2 (BeautifulSoup) → đăng **bản nháp** WordPress
 → ghi kết quả (trạng thái, URL, thời gian, lỗi) ngược lại file Excel. Mỗi lần chạy xử lý **1 dòng**.
 
 ## 1. Cài đặt
@@ -19,7 +19,7 @@ python main.py init-data
 ```
 
 Sinh `data/keywords.xlsx` gồm:
-- Sheet **Data**: 21 cột (8 cột input từ nghiên cứu từ khóa + các cột AI ghi lại + trạng thái), kèm vài dòng `Pending` mẫu.
+- Sheet **Data**: 19 cột (8 cột input từ nghiên cứu từ khóa + các cột AI ghi lại + trạng thái), kèm vài dòng `Pending` mẫu.
 - Sheet **Cấu Hình**: prompts, banned words, style ảnh.
 
 ## 3. Chạy thử (DRY-RUN — không tốn credit, không đăng gì)
@@ -29,7 +29,7 @@ python main.py run-once --dry-run --keep-images
 ```
 
 - Sinh nội dung giả lập, nhưng **ảnh WebP được tạo thật** vào `output/`.
-- Giả lập upload WordPress / đăng bài nháp / Album Facebook, in URL giả.
+- Giả lập upload WordPress / đăng bài nháp, in URL giả.
 - Ghi `Success` + URL + thời gian vào `keywords.xlsx`.
 - `--keep-images` giữ lại ảnh trong `output/` để kiểm tra (mặc định sẽ dọn sạch).
 
@@ -55,4 +55,19 @@ code hay Excel.
 - Bài WordPress đăng ở trạng thái `draft` để bạn kiểm duyệt thủ công.
 - Meta description ghi qua `excerpt` + (tùy chọn) trường của plugin SEO (Yoast/RankMath) — cấu hình
   `wordpress.seo_plugin` trong `settings.json`.
-- Facebook Album cần **Page** (không phải profile cá nhân) và quyền `pages_manage_posts`.
+
+## 6. Đăng lên CoreVMax thay vì WordPress
+
+Tool hỗ trợ 2 đích đăng bài, chọn bằng biến môi trường `PUBLISH_TARGET`:
+
+- `PUBLISH_TARGET=wordpress` (mặc định) — như trên.
+- `PUBLISH_TARGET=corevmax` — đăng qua Publishing API của CoreVMax (site Laravel tự code,
+  xem `routes/api.php` + `app/Http/Controllers/Api/PublishController.php` trong repo `corevmax2`).
+  Cần trong `.env`:
+  - `CVX_BASE_URL` — domain gốc của site (không có `/` cuối).
+  - `CVX_API_TOKEN` — đúng giá trị `PUBLISHING_API_TOKEN` trong `.env` của site CoreVMax đó
+    (API tắt hoàn toàn nếu site chưa đặt biến này).
+
+  Cấu hình mặc định (`default_post_status`, `internal_links.max_candidates`) nằm trong khối
+  `"corevmax"` của `settings.json`, song song với khối `"wordpress"`. Bản đầu chỉ lấy bài viết
+  cùng chuyên mục để gợi ý internal link (chưa có sản phẩm/trang như bên WordPress).

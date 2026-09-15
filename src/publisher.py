@@ -1,21 +1,38 @@
-"""Module 5: Multi-channel Publisher (WordPress + Facebook)."""
+"""Module 5: Publisher — dispatches to whichever backend PUBLISH_TARGET selects."""
 from __future__ import annotations
 
 import logging
 
-from .clients import facebook_client, wordpress_client
-from .image_pipeline import rate_limit_sleep
+from .clients import corevmax_client, wordpress_client
 
 logger = logging.getLogger(__name__)
 
 
-def upload_to_wordpress_media(local_image_path: str) -> dict:
+def _client():
+    from .env import get_publish_target
+
+    return corevmax_client if get_publish_target() == "corevmax" else wordpress_client
+
+
+def resolve_category_id(category_name: str) -> int | None:
+    return _client().resolve_category_id(category_name)
+
+
+def fetch_internal_link_candidates(
+    keyword: str,
+    category_id: int | None = None,
+    config: dict | None = None,
+) -> list[dict]:
+    return _client().fetch_internal_link_candidates(keyword, category_id=category_id, config=config)
+
+
+def upload_featured_media(local_image_path: str) -> dict:
     """Returns {'attachment_id', 'source_url'}."""
-    media = wordpress_client.upload_media(local_image_path)
+    media = _client().upload_media(local_image_path)
     return {"attachment_id": media["id"], "source_url": media["source_url"]}
 
 
-def publish_wordpress_post(
+def publish_post(
     title: str,
     content: str,
     meta_description: str,
@@ -27,23 +44,20 @@ def publish_wordpress_post(
     slug: str | None = None,
     category_id: int | None = None,
 ) -> str:
-    """Publish a WP post; returns the post URL.
+    """Publish a post on the active target; returns the post URL.
 
-    `title` becomes the post H1. `seo_title` is the SEO/meta title pinned in RankMath
-    (kept separate so the H1 can differ). `slug` sets the URL.
+    `title` becomes the post H1. `seo_title` is the SEO/meta title (kept separate so the
+    H1 can differ). `slug` sets the URL.
     """
-    wp_cfg = config.get("wordpress", {})
-    status = wp_cfg.get("default_post_status", "draft")
+    client = _client()
+    target = "corevmax" if client is corevmax_client else "wordpress"
+    target_cfg = config.get(target, {})
+    status = target_cfg.get("default_post_status", "draft")
     if category_id is None:
-        category_id = wordpress_client.resolve_category_id(category_name)
+        category_id = client.resolve_category_id(category_name)
 
-    meta = _seo_meta(
-        meta_description,
-        wp_cfg.get("seo_plugin", "none"),
-        seo_title=seo_title,
-        focus_keyword=focus_keyword,
-    )
-    result = wordpress_client.create_post(
+    meta = _build_meta(target, meta_description, target_cfg, seo_title, focus_keyword)
+    result = client.create_post(
         title=title,
         content=content,
         excerpt=meta_description,
@@ -56,13 +70,35 @@ def publish_wordpress_post(
     return result["link"]
 
 
+def _build_meta(
+    target: str,
+    meta_description: str,
+    target_cfg: dict,
+    seo_title: str = "",
+    focus_keyword: str = "",
+) -> dict | None:
+    if target == "corevmax":
+        # Native Post columns — no plugin-meta shim needed (see corevmax_client.create_post).
+        return {
+            "seo_title": seo_title,
+            "meta_description": meta_description,
+            "focus_keyword": focus_keyword,
+        }
+    return _seo_meta(
+        meta_description,
+        target_cfg.get("seo_plugin", "none"),
+        seo_title=seo_title,
+        focus_keyword=focus_keyword,
+    )
+
+
 def _seo_meta(
     meta_description: str,
     plugin: str,
     seo_title: str = "",
     focus_keyword: str = "",
 ) -> dict | None:
-    """Build SEO-plugin meta fields (title + description + focus keyword).
+    """Build WordPress SEO-plugin meta fields (title + description + focus keyword).
 
     NOTE for RankMath: these `rank_math_*` keys are only accepted over the REST API if
     they are registered with `show_in_rest` on the WordPress side (see the mu-plugin in
@@ -88,21 +124,3 @@ def _seo_meta(
             meta["rank_math_focus_keyword"] = focus_keyword
         return meta or None
     return None  # 'none' -> rely on excerpt only
-
-
-def publish_facebook_album(caption: str, image_urls: list[str], config: dict) -> str:
-    """Upload each image as an unpublished photo, then publish a feed post. Returns URL."""
-    version = config.get("facebook", {}).get("graph_version", "v19.0")
-    photo_ids: list[str] = []
-    for url in image_urls:
-        if not url:
-            continue
-        photo_id = facebook_client.upload_unpublished_photo(url, version=version)
-        photo_ids.append(photo_id)
-        rate_limit_sleep(config)
-
-    if not photo_ids:
-        raise ValueError("No images available to build the Facebook album.")
-
-    result = facebook_client.publish_feed_with_media(caption, photo_ids, version=version)
-    return result["url"]

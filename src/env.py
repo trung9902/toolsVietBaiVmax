@@ -26,6 +26,11 @@ def get_env(key: str, default: str | None = None) -> str | None:
     return os.getenv(key, default)
 
 
+def get_publish_target() -> str:
+    """Which backend to publish to: 'wordpress' (default) or 'corevmax'."""
+    return (os.getenv("PUBLISH_TARGET") or "wordpress").strip().lower()
+
+
 def require_env(key: str) -> str:
     val = os.getenv(key)
     if not val:

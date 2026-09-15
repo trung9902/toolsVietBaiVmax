@@ -1,6 +1,6 @@
 """Module 1: Data & Config Manager (local Excel via openpyxl).
 
-Owns the `keywords.xlsx` workbook: the `Data` sheet (15-column keyword table) and the
+Owns the `keywords.xlsx` workbook: the `Data` sheet (19-column keyword table) and the
 `Cấu Hình` settings sheet. Also merges non-secret defaults from `settings.json`.
 Secrets are never read from or written to Excel — see `src/env.py`.
 """
@@ -15,8 +15,8 @@ from openpyxl import Workbook, load_workbook
 
 logger = logging.getLogger(__name__)
 
-# 21-column schema (1-indexed columns A..U). Columns 1-8 are INPUT (filled by the user
-# via keyword research); columns 9-14 are written back by the AI; 15-21 are runtime status.
+# 19-column schema (1-indexed columns A..S). Columns 1-8 are INPUT (filled by the user
+# via keyword research); columns 9-13 are written back by the AI; 14-19 are runtime status.
 COLUMNS = [
     "Tên nhóm",                             # 1  keyword-group name (input)
     "Từ khóa chính",                        # 2  main/focus keyword (input, required)
@@ -31,14 +31,12 @@ COLUMNS = [
     "Đoạn Sapo website",                    # 11 sapo/intro paragraph (AI writes back)
     "H1 của website",                       # 12 H1 = post title (AI writes back)
     "Nội dung website",                     # 13 HTML body content (AI writes back)
-    "Nội dung Fanpage",                     # 14 social caption (AI writes back)
-    "Trạng thái",                           # 15 status: Pending|Processing|Success|Failed
-    "Link Website",                         # 16 published post URL
-    "Link Fanpage",                         # 17 published FB URL
-    "Link Ảnh Đại Diện",                    # 18 featured image URL
-    "Link Ảnh Kèm Theo",                    # 19 in-content image URLs (comma separated)
-    "Thời gian đăng",                       # 20 publish datetime
-    "Nhật ký lỗi",                          # 21 error log
+    "Trạng thái",                           # 14 status: Pending|Processing|Success|Failed
+    "Link Website",                         # 15 published post URL
+    "Link Ảnh Đại Diện",                    # 16 featured image URL
+    "Link Ảnh Kèm Theo",                    # 17 in-content image URLs (comma separated)
+    "Thời gian đăng",                       # 18 publish datetime
+    "Nhật ký lỗi",                          # 19 error log
 ]
 COL_INDEX = {name: i + 1 for i, name in enumerate(COLUMNS)}
 STATUS_COL = COL_INDEX["Trạng thái"]
@@ -58,10 +56,8 @@ KEY_MAP = {
     "sapo": "Đoạn Sapo website",
     "h1": "H1 của website",
     "html_content": "Nội dung website",
-    "fanpage_content": "Nội dung Fanpage",
     "status": "Trạng thái",
     "link_website": "Link Website",
-    "link_fanpage": "Link Fanpage",
     "featured_image_url": "Link Ảnh Đại Diện",
     "content_image_urls": "Link Ảnh Kèm Theo",
     "published_at": "Thời gian đăng",
@@ -108,8 +104,6 @@ class ConfigManager:
         prompts = cfg.setdefault("prompts", {})
         if "system_prompt_web_seo" in overrides:
             prompts["system_prompt_web_seo"] = overrides["system_prompt_web_seo"]
-        if "system_prompt_social" in overrides:
-            prompts["system_prompt_social"] = overrides["system_prompt_social"]
         if "image_style_prompt" in overrides:
             prompts["image_style_prompt"] = overrides["image_style_prompt"]
         if "banned_words" in overrides:
@@ -133,40 +127,6 @@ class ConfigManager:
                 break
         wb.close()
         return result
-
-    def fetch_facebook_retry_rows(self, include_skipped: bool = False) -> list[dict]:
-        """Rows where WordPress is published but Facebook is not, needing a FB-only retry.
-
-        Criteria: status == 'Success', Link Fanpage empty, and at least one stored image URL.
-        By default only rows whose error log mentions Facebook are returned (the genuine
-        "web posted but FB errored" case). Pass include_skipped=True to also include rows
-        that were posted while Facebook was disabled (no error, just never sent to FB).
-        """
-        if not os.path.exists(self.data_file):
-            raise FileNotFoundError(
-                f"{self.data_file} not found. Run `python main.py init-data` first."
-            )
-        wb = load_workbook(self.data_file, data_only=True)
-        ws = wb[self.data_sheet]
-        rows: list[dict] = []
-        for r in range(2, ws.max_row + 1):
-            status = ws.cell(row=r, column=STATUS_COL).value
-            if status is None or str(status).strip().lower() != "success":
-                continue
-            fb_link = ws.cell(row=r, column=COL_INDEX["Link Fanpage"]).value
-            if fb_link is not None and str(fb_link).strip():
-                continue  # already on Facebook
-            featured = ws.cell(row=r, column=COL_INDEX["Link Ảnh Đại Diện"]).value
-            content = ws.cell(row=r, column=COL_INDEX["Link Ảnh Kèm Theo"]).value
-            if not (featured or content):
-                continue  # nothing to post
-            error_log = ws.cell(row=r, column=COL_INDEX["Nhật ký lỗi"]).value
-            if not include_skipped:
-                if not (error_log and "facebook" in str(error_log).lower()):
-                    continue
-            rows.append(self._row_to_dict(ws, r))
-        wb.close()
-        return rows
 
     def _row_to_dict(self, ws, r: int) -> dict:
         data = {"row_index": r}
@@ -206,9 +166,9 @@ class ConfigManager:
         ws = wb.active
         ws.title = self.data_sheet
         ws.append(COLUMNS)
-        # Columns 1-8 are INPUT (from keyword research). The 6 AI-write-back columns
-        # (Title/Meta/Sapo/H1/Nội dung/Fanpage) are left blank; only status is set to Pending.
-        n_ai = 6  # Title Website .. Nội dung Fanpage
+        # Columns 1-8 are INPUT (from keyword research). The 5 AI-write-back columns
+        # (Title/Meta/Sapo/H1/Nội dung) are left blank; only status is set to Pending.
+        n_ai = 5  # Title Website .. Nội dung website
         n_tail = len(COLUMNS) - STATUS_COL  # Link Website .. Nhật ký lỗi
         samples = [
             ["Chăm sóc da mùa hè", "cách chăm sóc da mùa hè",
@@ -234,7 +194,6 @@ class ConfigManager:
         p = self.settings["prompts"]
         cfg_rows = [
             ["system_prompt_web_seo", p["system_prompt_web_seo"]],
-            ["system_prompt_social", p["system_prompt_social"]],
             ["image_style_prompt", p["image_style_prompt"]],
             ["banned_words", ", ".join(p["banned_words"])],
         ]

@@ -199,53 +199,6 @@ def _truncate(text: str, limit: int) -> str:
     return cut.rstrip(" ,.;:-")
 
 
-def generate_fanpage_caption(
-    keyword: str,
-    audience: str,
-    system_prompt_social: str,
-    banned_words: list[str],
-    model: str = "gpt-4o",
-    intent: str = "",
-) -> str:
-    """Return a Facebook post that hooks the reader and solves their problem.
-
-    `audience` ("Bài viết sẽ nhắm đến đối tượng") picks and shapes the TONE. `intent`
-    ("Ý định tìm kiếm của người dùng") answers "what are they worried about?" and becomes
-    the hook + the substance of the post. Output has emojis + hashtags, reads like a real
-    person (not AI), stays within Facebook page policy.
-    """
-    system = f"{system_prompt_social}\n\n{_rules_block(banned_words)}"
-
-    intent = (intent or "").strip()
-    intent_line = (
-        f"Mối bận tâm của người đọc (họ đang lo/khó ở điều gì): {intent}\n"
-        if intent
-        else "Mối bận tâm của người đọc: tự suy luận từ chủ đề và đối tượng bên dưới.\n"
-    )
-    user = (
-        f"Viết một bài đăng Facebook (KHÔNG phải bài blog) cho Fanpage về chủ đề: {keyword}\n"
-        f"Đối tượng nhắm tới: {audience}\n"
-        f"{intent_line}\n"
-        f"YÊU CẦU BẮT BUỘC:\n"
-        f"1. GIỌNG ĐIỆU: dựa vào đối tượng ở trên để chọn cách xưng hô và giọng phù hợp — "
-        f"trẻ trung nhưng chuyên nghiệp, gần gũi, đáng tin, KHÔNG sến, KHÔNG như quảng cáo rao vặt.\n"
-        f"2. HOOK: 1-2 câu đầu phải chạm ngay vào mối bận tâm của người đọc (biến điều họ đang lo "
-        f"thành câu hỏi hoặc tình huống thật) để họ dừng lại và đọc tiếp.\n"
-        f"3. NỘI DUNG: đi thẳng vào GIẢI QUYẾT vấn đề đó — cho lời khuyên/bước làm/gợi ý cụ thể, "
-        f"có giá trị thật, đọc xong thấy được gỡ rối. Độ dài vừa phải cho Facebook (khoảng 120-250 từ), "
-        f"chia đoạn ngắn dễ đọc, xuống dòng thoáng.\n"
-        f"4. VĂN PHONG NGƯỜI THẬT: viết như một người thật đang chia sẻ, có cảm xúc và trải nghiệm; "
-        f"TUYỆT ĐỐI không đều đều, khuôn mẫu, lộ chất AI.\n"
-        f"5. ĐỊNH DẠNG FANPAGE: chèn icon/emoji hợp cảnh rải tự nhiên (kể cả đầu vài dòng), kết thúc "
-        f"bằng một CTA nhẹ nhàng (mời bình luận/nhắn tin/đọc thêm) và 3-6 hashtag tiếng Việt liên quan.\n"
-        f"6. CHÍNH SÁCH: tuyệt đối không vi phạm chính sách Facebook (không cam kết tuyệt đối, không "
-        f"giật gân sai sự thật, không nội dung nhạy cảm/cấm).\n"
-        f"Chỉ trả về đúng phần nội dung bài đăng, không giải thích, không tiêu đề phụ."
-    )
-    caption = openai_client.chat_text(system, user, model=model)
-    return _strip_banned(caption, banned_words)
-
-
 def _strip_banned(text: str, banned_words: list[str]) -> str:
     """Safety net: remove any banned phrases the model may have slipped in."""
     if not text or not banned_words:

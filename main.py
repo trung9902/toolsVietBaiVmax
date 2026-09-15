@@ -3,6 +3,7 @@
 Commands:
   init-data          Generate a sample data/keywords.xlsx (Data + Cấu Hình sheets).
   run-once           Process the next Pending keyword end-to-end, once (one row per run).
+  run-batch N        Process up to N Pending keywords sequentially (stops early if none left).
 
 Scheduling is intentionally external: call `run-once` from Windows Task Scheduler / cron
 as often as you want; each invocation handles exactly one Pending row.
@@ -56,15 +57,20 @@ def cmd_run_once(args) -> int:
     return 0
 
 
-def cmd_retry_facebook(args) -> int:
+def cmd_run_batch(args) -> int:
     _apply_dry_run_flag(args)
     from src import pipeline
 
-    count = pipeline.retry_facebook(include_skipped=args.include_skipped, limit=args.limit)
-    if count == 0:
-        print("No rows were posted to Facebook.")
-    else:
-        print(f"Posted {count} row(s) to Facebook.")
+    log = logging.getLogger("main")
+    done = 0
+    for i in range(1, args.count + 1):
+        log.info("Batch %d/%d — processing next Pending keyword.", i, args.count)
+        processed = pipeline.run_once(keep_images=args.keep_images)
+        if not processed:
+            log.info("No more Pending keywords. Stopping after %d post(s).", done)
+            break
+        done += 1
+    print(f"Batch finished — processed {done} post(s) out of {args.count} requested.")
     return 0
 
 
@@ -83,20 +89,16 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(p_run)
     p_run.set_defaults(func=cmd_run_once)
 
-    p_fb = sub.add_parser(
-        "retry-facebook",
-        help="Re-post Facebook for rows already published on WordPress but missing the FB post",
-    )
-    p_fb.add_argument("--dry-run", action="store_true", help="Mock all external APIs.")
-    p_fb.add_argument(
-        "--include-skipped",
-        action="store_true",
-        help="Also post rows that were published while Facebook was disabled (not just errored ones).",
-    )
-    p_fb.add_argument(
-        "--limit", type=int, default=None, help="Max number of rows to retry this run."
-    )
-    p_fb.set_defaults(func=cmd_retry_facebook)
+    def positive_int(value):
+        ivalue = int(value)
+        if ivalue < 1:
+            raise argparse.ArgumentTypeError("count must be a positive integer")
+        return ivalue
+
+    p_batch = sub.add_parser("run-batch", help="Process up to N Pending keywords sequentially")
+    p_batch.add_argument("count", type=positive_int, help="How many posts to process (e.g. 2 or 5)")
+    add_common(p_batch)
+    p_batch.set_defaults(func=cmd_run_batch)
 
     return parser
 

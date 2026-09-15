@@ -1,7 +1,8 @@
 """Module 4: Dynamic HTML Parser (BeautifulSoup4).
 
 For the first N (<=3) H2 headings: build a 1:1 image from the heading, upload it to the
-WordPress media library to obtain a public URL, then inject a SEO <figure> right after the H2.
+active publish target's media library to obtain a public URL, then inject a SEO <figure>
+right after the H2.
 """
 from __future__ import annotations
 
@@ -9,7 +10,7 @@ import logging
 
 from bs4 import BeautifulSoup
 
-from .clients import wordpress_client
+from . import publisher
 from .image_pipeline import ImagePipeline, rate_limit_sleep
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ def process_and_inject_media(
         if temp_paths is not None:
             temp_paths.append(local_path)
 
-        media = wordpress_client.upload_media(local_path)
+        media = publisher.upload_featured_media(local_path)
         web_url = media["source_url"]
         image_urls.append(web_url)
 
